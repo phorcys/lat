@@ -1,0 +1,93 @@
+### Auto build LAT and release its binary with Github Action
+name: Build and Release LAT
+
+on:
+  workflow_dispatch:
+  release:
+  push:
+    paths:
+      - "**/*.c"
+      - "**/*.h"
+      - "**/*.S"
+      - "**/*.py"
+      - "**/meson.build"
+      - "meson.options"
+      - "**/*.inc"
+      - "**/*.yml"
+  pull_request:
+    types: [assigned, opened, synchronize, reopened]
+    paths:
+      - "**/*.c"
+      - "**/*.h"
+      - "**/*.S"
+      - "**/*.py"
+      - "**/meson.build"
+      - "meson.options"
+      - "**/*.inc"
+      - "**/*.yml"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ABI2]
+        type: [64, 32, tcg64, tcg32]
+        debug: ["", "-dbg"]
+        opt: [1, 2, 3]
+        exclude:
+          - type: tcg64
+            opt: 2
+          - type: tcg64
+            opt: 3
+          - type: tcg32
+            opt: 2
+          - type: tcg32
+            opt: 3
+    runs-on: self-hosted
+    steps:
+      - name: "Checkout LATX Repository"
+        uses: actions/checkout@v4
+
+      - name: "Environment preparation"
+        run: |
+          if [[ ${{ matrix.platform }} == 'ABI22' ]]; then
+            sudo apt-get -y install debian-ports-archive-keyring debootstrap
+            sudo wget http://deb.debian.org/debian/pool/main/q/qemu/qemu-user_9.2.2+ds-1+b2_amd64.deb
+            sudo wget http://deb.debian.org/debian/pool/main/q/qemu/qemu-user-binfmt_9.2.2+ds-1+b2_amd64.deb
+            sudo apt install ./qemu-user_9.2.2+ds-1+b2_amd64.deb ./qemu-user-binfmt_9.2.2+ds-1+b2_amd64.deb
+            sudo debootstrap --arch=loong64 --include=debian-ports-archive-keyring sid /opt/sysroot http://deb.debian.org/debian-ports/
+            sudo cp /usr/bin/qemu-loong* /opt/sysroot/usr/bin/
+            sudo mount -t proc proc /opt/sysroot/proc
+            sudo mount -t sysfs /sys /opt/sysroot/sys
+            sudo mount --bind /dev /opt/sysroot/dev
+            sudo mount --bind /dev/pts /opt/sysroot/dev/pts
+            sudo chroot /opt/sysroot /bin/sh
+            apt-get -y install build-essential git meson ninja-build make python3 libglib2.0-dev
+            exit
+          else
+            echo "TODO: OLDWORLD"
+          fi
+
+      - name: "Build LATX"
+        run: |
+          ls
+          cd latxbuild
+          if [[ ${{ matrix.platform }} == 'ABI2' ]]; then
+            if [[ ${{ matrix.type }} == '64' || ${{ matrix.type }} == '32' ]]; then
+              bash build${{ matrix.type }}${{ matrix.debug }}.sh -c -O ${{ matrix.opt }}
+            else
+              bash build${{ matrix.type }}${{ matrix.debug }}.sh -c
+            fi
+          else
+            bash build${{ matrix.type }}${{ matrix.debug }}.sh -c -O ${{ matrix.opt }}
+          fi
+      - name: "Get short Git commit"
+        id: git-info
+        run: echo "SHORT_COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      - name: "Upload Artifact"
+        uses: actions/upload-artifact@v4
+        with:
+          name: latx-${{ matrix.type }}-${{ matrix.opt }}-${{ matrix.debug }}-${{ matrix.platform }}
+          path: build${{ matrix.type }}/latx-*
