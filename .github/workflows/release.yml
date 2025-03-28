@@ -1,0 +1,111 @@
+### Auto build LAT and release its binary with Github Action
+name: Build and Release LAT
+
+on:
+  workflow_dispatch:
+  release:
+  push:
+    paths:
+      - "**/*.c"
+      - "**/*.h"
+      - "**/*.S"
+      - "**/*.py"
+      - "**/meson.build"
+      - "meson.options"
+      - "**/*.inc"
+      - "**/*.yml"
+  pull_request:
+    types: [assigned, opened, synchronize, reopened]
+    paths:
+      - "**/*.c"
+      - "**/*.h"
+      - "**/*.S"
+      - "**/*.py"
+      - "**/meson.build"
+      - "meson.options"
+      - "**/*.inc"
+      - "**/*.yml"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ABI2]
+        type: [64, 32, tcg64, tcg32]
+        debug: ["", "-dbg"]
+        opt: [0, 1, 2, 3]
+        exclude:
+          - type: tcg64
+            opt: 2
+          - type: tcg64
+            opt: 3
+          - type: tcg32
+            opt: 2
+          - type: tcg32
+            opt: 3
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout LATX Repository"
+        uses: actions/checkout@v4
+
+      - name: Cache Loong64 sysroot
+        id: cache-sysroot
+        uses: actions/cache@v4
+        env:
+          cache-name: cache-loong64-sysroot-250406
+        with:
+          path: /opt/sysroot
+          key: ubuntu-latest-debian-loong64-sid-sysroot-${{ matrix.platform }}
+
+      - if: ${{ steps.cache-sysroot.outputs.cache-hit != 'true' }}
+        name: sysroot preparation
+        run: |
+          if [[ ${{ matrix.platform }} == 'ABI2' ]]; then
+            sudo apt-get -y install debian-ports-archive-keyring debootstrap
+            sudo wget http://deb.debian.org/debian/pool/main/q/qemu/qemu-user_9.2.2+ds-1+b2_amd64.deb
+            sudo wget http://deb.debian.org/debian/pool/main/q/qemu/qemu-user-binfmt_9.2.2+ds-1+b2_amd64.deb
+            sudo apt install ./qemu-user_9.2.2+ds-1+b2_amd64.deb ./qemu-user-binfmt_9.2.2+ds-1+b2_amd64.deb
+            sudo debootstrap --arch=loong64 --include=debian-ports-archive-keyring,build-essential,git,meson,ninja-build,make,python3,libglib2.0-dev,libssl-dev,libdrm-dev,lsb-release,make,python3-setuptools sid /opt/sysroot http://deb.debian.org/debian-ports/
+            sudo cp /usr/bin/qemu-loong* /opt/sysroot/usr/bin/
+            exit
+          else
+            echo "TODO: OLDWORLD"
+          fi
+
+      - name: "Build LATX"
+        run: |
+          sudo mount -t proc proc /opt/sysroot/proc
+          sudo mount -t sysfs /sys /opt/sysroot/sys
+          sudo mount --bind /dev /opt/sysroot/dev
+          sudo mount --bind /dev/pts /opt/sysroot/dev/pts
+          sudo mkdir -p /opt/sysroot/lat
+          sudo mount -o bind $(pwd) /opt/sysroot/lat
+          if [[ ${{ matrix.platform }} == 'ABI2' ]]; then
+            if [[ ${{ matrix.type }} == '64' || ${{ matrix.type }} == '32' ]]; then
+              sudo chroot /opt/sysroot /bin/bash -c "pwd;bash /lat/latxbuild/build${{ matrix.type }}${{ matrix.debug }}.sh -c -O ${{ matrix.opt }}"
+            else
+              sudo chroot /opt/sysroot /bin/bash -c "pwd;bash /lat/latxbuild/build${{ matrix.type }}${{ matrix.debug }}.sh -c"
+            fi
+          else
+            bash build${{ matrix.type }}${{ matrix.debug }}.sh -c -O ${{ matrix.opt }}
+          fi
+          sudo umount /opt/sysroot/lat
+          sudo umount /opt/sysroot/dev/pts
+          sudo umount /opt/sysroot/dev
+          sudo umount /opt/sysroot/sys
+          sudo umount /opt/sysroot/proc
+      - name: "Get short Git commit"
+        id: git-info
+        run: |
+          echo "SHORT_COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          if [[ ${{ matrix.type }} == '64' ]];then
+            echo "LAT_ARCH=x86_64" >> $GITHUB_ENV
+          else
+            echo "LAT_ARCH=i386" >> $GITHUB_ENV
+          fi
+      - name: "Upload Artifact"
+        uses: actions/upload-artifact@v4
+        with:
+          name: latx-${{ matrix.type }}-${{ matrix.opt }}-${{ matrix.debug }}-${{ matrix.platform }}-${SHORT_COMMIT}
+          path: build${{ matrix.type }}/latx-${LAT_ARCH}

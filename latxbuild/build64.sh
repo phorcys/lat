@@ -55,23 +55,24 @@ make_cmd() {
         if [ "$opt_level" = "0" ] ; then
             ../configure --target-list=x86_64-linux-user --enable-latx \
                 --disable-debug-info --optimize-O0 --static --extra-ldflags=-ldl \
-                --disable-docs
+                --disable-docs --disable-werror
         elif [ "$opt_level" = "1" ] ; then
             ../configure --target-list=x86_64-linux-user --enable-latx \
                 --disable-debug-info --optimize-O1 --extra-ldflags=-ldl --enable-kzt \
-                --disable-docs
+                --disable-docs --disable-werror
         elif [ "$opt_level" = "2" ] ; then
             ../configure --target-list=x86_64-linux-user --enable-latx \
                 --disable-debug-info --optimize-O2 --static --extra-ldflags=-ldl \
-                --disable-docs
+                --disable-docs --disable-werror
         elif [ "$opt_level" = "3" ] ; then
             ../configure --target-list=x86_64-linux-user --enable-latx \
                 --disable-debug-info --optimize-O3 --static --extra-ldflags=-ldl \
-                --disable-docs
+                --disable-docs --disable-werror
         else
             echo "invalid options"
         fi
     fi
+
 
     if [ ! -f "/usr/bin/ninja" ]; then
         make -j $(nproc)
