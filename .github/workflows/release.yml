@@ -66,7 +66,7 @@ jobs:
             sudo wget http://deb.debian.org/debian/pool/main/q/qemu/qemu-user_9.2.2+ds-1+b2_amd64.deb
             sudo wget http://deb.debian.org/debian/pool/main/q/qemu/qemu-user-binfmt_9.2.2+ds-1+b2_amd64.deb
             sudo apt install ./qemu-user_9.2.2+ds-1+b2_amd64.deb ./qemu-user-binfmt_9.2.2+ds-1+b2_amd64.deb
-            sudo debootstrap --arch=loong64 --include=debian-ports-archive-keyring,build-essential,git,meson,ninja-build,make,python3,libglib2.0-dev,libssl-dev sid /opt/sysroot http://deb.debian.org/debian-ports/
+            sudo debootstrap --arch=loong64 --include=debian-ports-archive-keyring,build-essential,git,meson,ninja-build,make,python3,libglib2.0-dev,libssl-dev,libdrm-dev,lsb-release,make,python3-setuptools sid /opt/sysroot http://deb.debian.org/debian-ports/
             sudo cp /usr/bin/qemu-loong* /opt/sysroot/usr/bin/
             exit
           else
@@ -83,7 +83,7 @@ jobs:
           sudo mount -o bind $(pwd) /opt/sysroot/lat
           if [[ ${{ matrix.platform }} == 'ABI2' ]]; then
             if [[ ${{ matrix.type }} == '64' || ${{ matrix.type }} == '32' ]]; then
-              sudo chroot /opt/sysroot /bin/bash -c "pwd;bash /lat/latxbuild/build${{ matrix.type }}${{ matrix.debug }}.sh -c -O ${{ matrix.opt }};"
+              sudo chroot /opt/sysroot /bin/bash -c "pwd;bash /lat/latxbuild/build${{ matrix.type }}${{ matrix.debug }}.sh -c -O ${{ matrix.opt }};cat /lat/build64/config.log"
             else
               sudo chroot /opt/sysroot /bin/bash -c "pwd;bash /lat/latxbuild/build${{ matrix.type }}${{ matrix.debug }}.sh -c"
             fi
@@ -104,9 +104,8 @@ jobs:
           else
             echo "LAT_ARCH=i386" >> $GITHUB_ENV
           fi
-
       - name: "Upload Artifact"
         uses: actions/upload-artifact@v4
         with:
-          name: latx-${{ matrix.type }}-${{ matrix.opt }}-${{ matrix.debug }}-${{ matrix.platform }}-${{ SHORT_COMMIT }}
-          path: build${{ matrix.type }}/latx-${{ LAT_ARCH }}
+          name: latx-${{ matrix.type }}-${{ matrix.opt }}-${{ matrix.debug }}-${{ matrix.platform }}-${SHORT_COMMIT}
+          path: build${{ matrix.type }}/latx-${LAT_ARCH}
