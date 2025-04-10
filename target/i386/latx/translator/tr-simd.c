@@ -60,12 +60,23 @@ bool translate_packsswb(IR1_INST *pir1)
         if (ir1_opnd_is_xmm(ir1_get_opnd(pir1, 1)) &&
             (ir1_opnd_base_reg_num(ir1_get_opnd(pir1, 0)) ==
              ir1_opnd_base_reg_num(ir1_get_opnd(pir1, 1)))) {
-            la_vssrani_b_h(dest, dest, 0);
+            //la_vssrani_b_h(dest, dest, 0);
+            // on 3A6000
+            // vsrani.b.h  latency 4 IPC 2 
+            // vsat.h      latency 2 IPC 2
+            // vpickev.b   latency 1 IPC 4
+            // latency&IPC from https://jia.je/unofficial-loongarch-intrinsics-guide/
+            la_vsat_h(dest, dest, 7);
+            la_vpickev_b(dest, dest, dest);
         } else {
-            la_vssrani_b_h(dest, dest, 0);
+            // la_vssrani_b_h(dest, dest, 0);
+            // IR2_OPND temp = ra_alloc_ftemp();
+            // la_vssrani_b_h(temp, src, 0);
+            // la_vextrins_d(dest, temp, VEXTRINS_IMM_4_0(1, 0));
             IR2_OPND temp = ra_alloc_ftemp();
-            la_vssrani_b_h(temp, src, 0);
-            la_vextrins_d(dest, temp, VEXTRINS_IMM_4_0(1, 0));
+            la_vsat_h(dest, dest, 7);
+            la_vsat_h(temp, src, 7);
+            la_vpickev_b(dest, temp, dest);
         }
     } else { //mmx
         /* transfer_to_mmx_mode */
@@ -76,7 +87,9 @@ bool translate_packsswb(IR1_INST *pir1)
         IR2_OPND src =
             load_freg_from_ir1_1(ir1_get_opnd(pir1, 1), false, IS_INTEGER);
         la_vpackev_d(dest, src, dest);
-        la_vssrani_b_h(dest, dest, 0);
+        //la_vssrani_b_h(dest, dest, 0);
+        la_vsat_h(dest, dest, 7);
+        la_vpickev_b(dest, dest, dest);
     }
     return true;
 }
