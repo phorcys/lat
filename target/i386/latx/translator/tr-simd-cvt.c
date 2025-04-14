@@ -595,78 +595,93 @@ bool translate_cvtps2pi(IR1_INST *pir1)
     IR2_OPND dest = ra_alloc_mmx(ir1_opnd_base_reg_num(ir1_get_opnd(pir1, 0)));
     IR2_OPND src_lo;                                         
     src_lo = load_freg128_from_ir1(ir1_get_opnd(pir1, 1));
-    IR2_OPND temp_int = ra_alloc_itemp();
     IR2_OPND temp_fcsr = ra_alloc_itemp();
-    IR2_OPND ftemp_src_temp = ra_alloc_ftemp();
-    IR2_OPND ftemp_final = ra_alloc_ftemp();
-    IR2_OPND label_for_flow1 = ra_alloc_label(); 
-    IR2_OPND label_for_flow2 = ra_alloc_label(); 
-    IR2_OPND label_over = ra_alloc_label(); 
-    IR2_OPND label_high = ra_alloc_label(); 
+    IR2_OPND label_fastend = ra_alloc_label();
+    IR2_OPND sse_invalid = ra_alloc_ftemp();
+    IR2_OPND comp_mask = ra_alloc_ftemp();
+    IR2_OPND overflow = ra_alloc_ftemp();
 
-    /**
-     * verify the first single scalar operand is unorder or overflow
-     * or under flow?
-     */
-    IR2_OPND ftemp_src1 = ra_alloc_ftemp();
-
-    /* convertion has to be done first, or INVALID exception may be missed */
-    la_vreplve_w(ftemp_src_temp, src_lo, zero_ir2_opnd);
-    la_vftint_w_s(ftemp_src_temp, ftemp_src_temp);
-
-    /* check if INVALID bit in fcsr is set */
+    la_vftint_w_s(dest, src_lo);
     la_movfcsr2gr(temp_fcsr, fcsr_ir2_opnd);
-    la_bstrpick_w(temp_fcsr, temp_fcsr, FCSR_OFF_CAUSE_V, FCSR_OFF_CAUSE_V);
-    la_bnez(temp_fcsr, label_for_flow1);
+    la_bstrpick_w(temp_fcsr, temp_fcsr, FCSR_OFF_CAUSE_O, FCSR_OFF_CAUSE_V);
+    la_beqz(temp_fcsr, label_fastend);
+    //slow path, either Nan or overflow
+    la_vldi(sse_invalid, 0b1001110000000); // broadcast 0x80000000 to all
+    la_vldi(overflow, (0b10011 << 8) | 0x4f);
+    la_vfcmp_s(comp_mask, overflow, src_lo, 0xE); // get Nan mark 0xE=cULE
+    la_vbitsel_v(dest, dest, sse_invalid, comp_mask);
+    la_label(label_fastend);
 
-    /* ##if## no INVALID exception happend, save the lower bits result */
-    la_fmov_s(ftemp_src1, ftemp_src_temp);
-    la_b(label_high);
+    // IR2_OPND ftemp_src_temp = ra_alloc_ftemp();
+    // IR2_OPND ftemp_final = ra_alloc_ftemp();
+    // IR2_OPND label_for_flow1 = ra_alloc_label(); 
+    // IR2_OPND label_for_flow2 = ra_alloc_label(); 
+    // IR2_OPND label_over = ra_alloc_label(); 
+    // IR2_OPND label_high = ra_alloc_label(); 
 
-    /* ##else## INVALID exception did happen, load 0x80000000 manually*/
-    la_label(label_for_flow1);
-    li_wu(temp_int, 0x80000000);
-    la_movgr2fr_d(ftemp_src1, temp_int);
-    la_label(label_high);
+    // /**
+    //  * verify the first single scalar operand is unorder or overflow
+    //  * or under flow?
+    //  */
+    // IR2_OPND ftemp_src1 = ra_alloc_ftemp();
 
-    /**
-     * verify the second single scalar operand is unorder or overflow
-     * or under flow?
-     */
-    IR2_OPND ftemp_src2 = ra_alloc_ftemp();
-    la_vextrins_w(ftemp_src2, src_lo, VEXTRINS_IMM_4_0(0, 1));
+    // /* convertion has to be done first, or INVALID exception may be missed */
+    // la_vreplve_w(ftemp_src_temp, src_lo, zero_ir2_opnd);
+    // la_vftint_w_s(ftemp_src_temp, ftemp_src_temp);
 
-    /* convertion has to be done first, or INVALID exception may be missed */
-    la_vreplve_w(ftemp_src_temp, ftemp_src2, zero_ir2_opnd);
-    la_vftint_w_s(ftemp_src_temp, ftemp_src_temp);
+    // /* check if INVALID bit in fcsr is set */
+    // la_movfcsr2gr(temp_fcsr, fcsr_ir2_opnd);
+    // la_bstrpick_w(temp_fcsr, temp_fcsr, FCSR_OFF_CAUSE_V, FCSR_OFF_CAUSE_V);
+    // la_bnez(temp_fcsr, label_for_flow1);
 
-    la_movfcsr2gr(temp_fcsr, fcsr_ir2_opnd);
-    la_bstrpick_w(temp_fcsr, temp_fcsr, FCSR_OFF_CAUSE_V, FCSR_OFF_CAUSE_V);
-    la_bnez(temp_fcsr, label_for_flow2);
+    // /* ##if## no INVALID exception happend, save the lower bits result */
+    // la_fmov_s(ftemp_src1, ftemp_src_temp);
+    // la_b(label_high);
 
-    /* ##if## no INVALID exception happend, save the higher bits result */
-    la_fmov_s(ftemp_src2, ftemp_src_temp);
-    la_b(label_over);
+    // /* ##else## INVALID exception did happen, load 0x80000000 manually*/
+    // la_label(label_for_flow1);
+    // li_wu(temp_int, 0x80000000);
+    // la_movgr2fr_d(ftemp_src1, temp_int);
+    // la_label(label_high);
 
-    /* ##else## INVALID exception did happen, load 0x80000000 manually*/
-    la_label(label_for_flow2);
-    li_wu(temp_int, 0x80000000);
-    la_movgr2fr_d(ftemp_src2, temp_int);
-    la_label(label_over);
+    // /**
+    //  * verify the second single scalar operand is unorder or overflow
+    //  * or under flow?
+    //  */
+    // IR2_OPND ftemp_src2 = ra_alloc_ftemp();
+    // la_vextrins_w(ftemp_src2, src_lo, VEXTRINS_IMM_4_0(0, 1));
 
-    /**
-     * merge, use ftemp_final as transfer register to prevent damaging the
-     * 64 bits of the dest.
-     */
-    la_vilvl_w(ftemp_final, ftemp_src2, ftemp_src1);
-    la_vextrins_d(dest, ftemp_final, VEXTRINS_IMM_4_0(0, 0));
+    // /* convertion has to be done first, or INVALID exception may be missed */
+    // la_vreplve_w(ftemp_src_temp, ftemp_src2, zero_ir2_opnd);
+    // la_vftint_w_s(ftemp_src_temp, ftemp_src_temp);
 
-    ra_free_temp(ftemp_src1);
-    ra_free_temp(ftemp_src2);
-    ra_free_temp(ftemp_final);
-    ra_free_temp(ftemp_src_temp);
-    ra_free_temp(temp_int);
-    ra_free_temp(temp_fcsr);
+    // la_movfcsr2gr(temp_fcsr, fcsr_ir2_opnd);
+    // la_bstrpick_w(temp_fcsr, temp_fcsr, FCSR_OFF_CAUSE_V, FCSR_OFF_CAUSE_V);
+    // la_bnez(temp_fcsr, label_for_flow2);
+
+    // /* ##if## no INVALID exception happend, save the higher bits result */
+    // la_fmov_s(ftemp_src2, ftemp_src_temp);
+    // la_b(label_over);
+
+    // /* ##else## INVALID exception did happen, load 0x80000000 manually*/
+    // la_label(label_for_flow2);
+    // li_wu(temp_int, 0x80000000);
+    // la_movgr2fr_d(ftemp_src2, temp_int);
+    // la_label(label_over);
+
+    // /**
+    //  * merge, use ftemp_final as transfer register to prevent damaging the
+    //  * 64 bits of the dest.
+    //  */
+    // la_vilvl_w(ftemp_final, ftemp_src2, ftemp_src1);
+    // la_vextrins_d(dest, ftemp_final, VEXTRINS_IMM_4_0(0, 0));
+
+    // ra_free_temp(ftemp_src1);
+    // ra_free_temp(ftemp_src2);
+    // ra_free_temp(ftemp_final);
+    // ra_free_temp(ftemp_src_temp);
+    // ra_free_temp(temp_int);
+    // ra_free_temp(temp_fcsr);
     return true;
 }
 
