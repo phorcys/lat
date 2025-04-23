@@ -2315,45 +2315,24 @@ bool translate_dpps(IR1_INST *pir1)
     IR2_OPND src1 = load_freg128_from_ir1(opnd1);
     IR2_OPND temp1 = ra_alloc_ftemp();
     IR2_OPND temp2 = ra_alloc_ftemp();
+    IR2_OPND temp3 = ra_alloc_ftemp();
     uint8_t imm = ir1_opnd_uimm(opnd2);
-    la_vxor_v(temp1, temp1, temp1);
-    la_vxor_v(temp2, temp2, temp2);
-    if(imm & 0x10){
-        la_vextrins_w(temp1, dest, 0x00);
-        la_vextrins_w(temp2, src1, 0x00);
+    la_vfmul_s(temp1, dest, src1);
+    la_vxor_v(temp3, temp3, temp3);
+    for(int i=0; i<4; ++i){
+        if(!(imm&(1<<(4+i)))) {
+            la_vextrins_w(temp1, temp3, (i<<4));
+        }
     }
-    if(imm & 0x20){
-        la_vextrins_w(temp1, dest, 0x11);
-        la_vextrins_w(temp2, src1, 0x11);
-    }
-    if(imm & 0x40){
-        la_vextrins_w(temp1, dest, 0x22);
-        la_vextrins_w(temp2, src1, 0x22);
-    }
-    if(imm & 0x80){
-        la_vextrins_w(temp1, dest, 0x33);
-        la_vextrins_w(temp2, src1, 0x33);
-    }
-    la_vfmul_s(temp1, temp1, temp2);
-    la_vpackod_w(temp2, temp1, temp1);
-    la_vpackev_w(temp1, temp1, temp1);
-    la_vfadd_s(temp1, temp1, temp2);
-    la_vpackod_d(temp2, temp1, temp1);
-    la_vpackev_d(temp1, temp1, temp1);
-    la_vfadd_s(temp1, temp1, temp2);
-
-    la_vxor_v(dest, dest, dest);
-    if(imm & 0x1){
-        la_vextrins_w(dest, temp1, 0x00);
-    }
-    if(imm & 0x2){
-        la_vextrins_w(dest, temp1, 0x11);
-    }
-    if(imm & 0x4){
-        la_vextrins_w(dest, temp1, 0x22);
-    }
-    if(imm & 0x8){
-        la_vextrins_w(dest, temp1, 0x33);
+    la_vshuf4i_w(temp2, temp1, 0b10110001); // temp1[a,b,c,d] temp2[b,a,d,c]
+    la_vfadd_s(temp1, temp1, temp2);        // temp1[ab,ba,cd,dc]
+    la_vshuf4i_w(temp2, temp1, 0b01001110); // temp2[cd,dc,ab,ba]
+    la_vfadd_s(temp1, temp1, temp2);        // temp1[abcd,badc,cdab,dcba]
+    la_vreplvei_w(dest, temp1, 0);          // for +/-Nan +/-Inf fix    
+    for(int i=0; i<4; ++i){
+        if(!(imm&(1<<i))) {
+            la_vextrins_w(dest, temp3, (i<<4));
+        }
     }
     set_high128_xreg_to_zero(dest);
     return true;
@@ -2369,29 +2348,23 @@ bool translate_dppd(IR1_INST *pir1)
     IR2_OPND src1 = load_freg128_from_ir1(opnd1);
     IR2_OPND temp1 = ra_alloc_ftemp();
     IR2_OPND temp2 = ra_alloc_ftemp();
+    IR2_OPND temp3 = ra_alloc_ftemp();
     uint8_t imm = ir1_opnd_uimm(opnd2);
 
-    la_xvxor_v(temp1, temp1, temp1);
-    la_xvxor_v(temp2, temp2, temp2);
-    if(imm & 0x10){
-        la_vextrins_d(temp1, dest, 0x00);
-        la_vextrins_d(temp2, src1, 0x00);
+    la_vfmul_d(temp1, dest, src1);
+    la_vxor_v(temp3, temp3, temp3);
+    for(int i=0; i<2; ++i){
+        if(!(imm&(1<<(4+i)))) {
+            la_vextrins_d(temp1, temp3, (i<<4));
+        }
     }
-    if(imm & 0x20){
-        la_vextrins_d(temp1, dest, 0x11);
-        la_vextrins_d(temp2, src1, 0x11);
-    }
-
-    la_vfmul_d(temp1, temp1, temp2);
-    la_vpackod_d(temp2, temp1, temp1);
-    la_vpackev_d(temp1, temp1, temp1);
-    la_vfadd_d(temp1, temp1, temp2);
-    la_xvxor_v(dest, dest, dest);
-    if(imm & 0x1){
-        la_xvextrins_d(dest, temp1, 0x00);
-    }
-    if(imm & 0x2){
-        la_xvextrins_d(dest, temp1, 0x11);
+    la_vshuf4i_w(temp2, temp1, 0b01001110); // temp1[a,b] temp2[b,a]
+    la_vfadd_d(dest, temp1, temp2);         // temp1[ab,ba]
+    la_vreplvei_d(dest, temp1, 0);          // for +/-Nan +/-Inf fix
+    for(int i=0; i<2; ++i){
+        if(!(imm&(1<<i))) {
+            la_vextrins_d(dest, temp3, (i<<4));
+        }
     }
     set_high128_xreg_to_zero(dest);
     return true;
