@@ -232,6 +232,18 @@ typedef struct my_VkXcbSurfaceCreateInfoKHR_s {
     int         window;
 } my_VkXcbSurfaceCreateInfoKHR_t;
 
+
+#define VK_MAX_DRIVER_NAME_SIZE 256
+#define VK_MAX_DRIVER_INFO_SIZE 256
+typedef struct my_VkPhysicalDeviceVulkan12Properties_s {
+    int   sType;
+    void* pNext;
+    int   driverID;
+    char  driverName[VK_MAX_DRIVER_NAME_SIZE];
+    char  driverInfo[VK_MAX_DRIVER_INFO_SIZE];
+    uint32_t __others[49];
+} my_VkPhysicalDeviceVulkan12Properties_t;
+
 typedef struct my_VkStruct_s {
     int         sType;
     struct my_VkStruct_s* pNext;
@@ -600,6 +612,7 @@ EXPORT int my_vkCreateXcbSurfaceKHR(void* instance, void* info, my_VkAllocationC
     return ret;
 }
 CREATE(vkCreateXlibSurfaceKHR)
+CREATE(vkCreateAndroidSurfaceKHR)
 CREATE(vkCreateRenderPass2)
 CREATE(vkCreateRenderPass2KHR)
 
@@ -687,6 +700,7 @@ DESTROY(vkDestroyDebugUtilsMessengerEXT)
 
 DESTROY64(vkDestroySurfaceKHR)
 
+CREATE(vkCreateSamplerYcbcrConversionKHR)
 DESTROY64(vkDestroySamplerYcbcrConversionKHR)
 
 DESTROY64(vkDestroyValidationCacheEXT)
@@ -750,7 +764,7 @@ EXPORT void my_vkGetPhysicalDeviceProperties(void* device, void* pProps)
     my->vkGetPhysicalDeviceProperties(device, pProps);
 }
 
-EXPORT void my_vkGetPhysicalDeviceSparseImageFormatProperties(void* device, int format, int type, int samples, int usage, int tiling, uint32_t* count, void** pProps)
+EXPORT void my_vkGetPhysicalDeviceSparseImageFormatProperties(void* device, int format, int type, int samples, uint32_t usage, int tiling, uint32_t* count, void** pProps)
 {
     my->vkGetPhysicalDeviceSparseImageFormatProperties(device, format, type, samples, usage, tiling, count, pProps);
 }
@@ -777,7 +791,7 @@ EXPORT void my_vkGetPhysicalDeviceMemoryProperties(void* device, void* pProps)
     my->vkGetPhysicalDeviceMemoryProperties(device, pProps);
 }
 
-EXPORT void my_vkCmdPipelineBarrier(void* device, int src, int dst, int dep,
+EXPORT void my_vkCmdPipelineBarrier(void* device, uint32_t src, uint32_t dst, uint32_t dep,
     uint32_t barrierCount, void* pBarriers, uint32_t bufferCount, void* pBuffers, uint32_t imageCount, void* pImages)
 {
     my->vkCmdPipelineBarrier(device, src, dst, dep, barrierCount, pBarriers, bufferCount, pBuffers, imageCount, pImages);
@@ -792,13 +806,12 @@ EXPORT int my_vkCreateDebugReportCallbackEXT(void* instance,
     dbg.pfnCallback = find_DebugReportCallbackEXT_Fct(dbg.pfnCallback);
     return my->vkCreateDebugReportCallbackEXT(instance, &dbg, find_VkAllocationCallbacks(&my_alloc, alloc), callback);
 }
-
-EXPORT int my_vkDestroyDebugReportCallbackEXT(void* instance, void* callback, void* alloc)
+EXPORT void my_vkDestroyDebugReportCallbackEXT(void* instance, void* callback, void* alloc)
 {
     my_VkAllocationCallbacks_t my_alloc;
-    return my->vkDestroyDebugReportCallbackEXT(instance, callback, find_VkAllocationCallbacks(&my_alloc, alloc));
+    my->vkDestroyDebugReportCallbackEXT(instance, callback, find_VkAllocationCallbacks(&my_alloc, alloc));
 }
-
+#define VK_ICD_WSI_PLATFORM_WAYLAND 1
 #define VK_ICD_WSI_PLATFORM_XCB 3
 #define VK_ICD_WSI_PLATFORM_XLIB 4
 
@@ -817,6 +830,9 @@ EXPORT int32_t my_vkGetPhysicalDeviceSurfaceSupportKHR(void* v1, uint32_t v2, ui
     my_VkIcdSurfaceBase_s * icd_surface = (my_VkIcdSurfaceBase_s *)v3;
     if (icd_surface->platform == VK_ICD_WSI_PLATFORM_XCB) {//only sync xcb platform ,xlib skip, other assert
         sync_xcb_connection(((my_VkIcdSurfaceXcb_s *)icd_surface)->connection);
+    } else if(icd_surface->platform == VK_ICD_WSI_PLATFORM_WAYLAND){
+        // TODO: report not support for wayland surface, need fix when wayland support complete.
+        *((uint32_t*)v4) = 0;
     } else if (icd_surface->platform != VK_ICD_WSI_PLATFORM_XLIB) {
         lsassertm(0, "error surface platform is %d\n", icd_surface->platform);
     }
@@ -824,4 +840,30 @@ EXPORT int32_t my_vkGetPhysicalDeviceSurfaceSupportKHR(void* v1, uint32_t v2, ui
 }
 
 CREATE(vkCreateHeadlessSurfaceEXT)
+
+EXPORT void my_vkGetPhysicalDeviceProperties2(void* device, void* pProps)
+{
+    my->vkGetPhysicalDeviceProperties2(device, pProps);
+    my_VkStruct_t *p = pProps;
+    while (p != NULL) {
+        // find VkPhysicalDeviceVulkan12Properties
+        // VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES = 52
+        if(p->sType == 52) {
+            my_VkPhysicalDeviceVulkan12Properties_t *pp = (my_VkPhysicalDeviceVulkan12Properties_t*)p;
+            strncat(pp->driverInfo, " with " LATX_VERSION, VK_MAX_DRIVER_INFO_SIZE - strlen(pp->driverInfo) - 1);
+            break;
+        }
+        p = p->pNext;
+    }
+ }
+
+CREATE(vkCreateIndirectCommandsLayoutEXT)
+CREATE(vkCreateIndirectExecutionSetEXT)
+DESTROY64(vkDestroyIndirectCommandsLayoutEXT)
+DESTROY64(vkDestroyIndirectExecutionSetEXT)
+
+CREATE(vkCreatePipelineBinariesKHR)
+DESTROY64(vkDestroyPipelineBinaryKHR)
+DESTROY(vkReleaseCapturedPipelineDataKHR)
+
 #pragma GCC diagnostic pop

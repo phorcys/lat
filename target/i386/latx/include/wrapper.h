@@ -1370,6 +1370,27 @@ void iFEpUup(uintptr_t fcn);
 void iFEpuppp(uintptr_t fcn);
 void iFEpuvvppp(uintptr_t fcn);
 void iFEpUUuppp(uintptr_t fcn);
+void vFpUuuUUUu(uintptr_t fnc);
+void vFpUuuup(uintptr_t fnc);
+void vFpupuuupupup(uintptr_t fnc);
+void iFpiiiuup(uintptr_t fnc);
+void iFpUuuLpUu(uintptr_t fnc);
+void iFpUUUup(uintptr_t fnc);
+void iFpupuU(uintptr_t fnc);
+void vFpuiULipp(uintptr_t fnc);
+void uFpubp(uintptr_t fnc);
+void vFpUuuu(uintptr_t fnc);
+void vFpiUUu(uintptr_t fnc);
+void iFpUiipp(uintptr_t fnc);
+void iFpUip(uintptr_t fnc);
+void vFpippp(uintptr_t fnc);
+void vFppUUuUUUU(uintptr_t fnc);
+void vFpUuuUip(uintptr_t fnc);
+void vFpiU(uintptr_t fnc);
+void iFpiiiuuup(uintptr_t fnc);
+void iFpUUu(uintptr_t fnc);
+void vFEpuuuupupup(uintptr_t fnc);
+void vFEpiiiuipp(uintptr_t fnc);
 //endvulkan
 //xcbV2
 void pFb(uintptr_t fcn);
