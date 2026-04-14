@@ -672,13 +672,14 @@ static void x86_cpu_vendor_words2str(char *dst, uint32_t vendor1,
           CPUID_7_0_EBX_BMI1 | CPUID_7_0_EBX_BMI2 | CPUID_7_0_EBX_ADX | \
           CPUID_7_0_EBX_PCOMMIT | CPUID_7_0_EBX_CLFLUSHOPT |            \
           CPUID_7_0_EBX_CLWB | CPUID_7_0_EBX_MPX | CPUID_7_0_EBX_FSGSBASE | \
-          CPUID_7_0_EBX_ERMS | CPUID_7_0_EBX_AVX2 | CPUID_7_0_EBX_HLE)
+          CPUID_7_0_EBX_ERMS | CPUID_7_0_EBX_AVX2 | CPUID_7_0_EBX_HLE | \
+          CPUID_7_0_EBX_SHA_NI)
 #else/*CONFIG_LATX_AVX_OPT*/
 #define TCG_7_0_EBX_FEATURES (CPUID_7_0_EBX_SMEP | CPUID_7_0_EBX_SMAP | \
           CPUID_7_0_EBX_BMI1 | CPUID_7_0_EBX_BMI2 | CPUID_7_0_EBX_ADX | \
           CPUID_7_0_EBX_PCOMMIT | CPUID_7_0_EBX_CLFLUSHOPT |            \
           CPUID_7_0_EBX_CLWB | CPUID_7_0_EBX_MPX | CPUID_7_0_EBX_FSGSBASE | \
-          CPUID_7_0_EBX_ERMS)
+          CPUID_7_0_EBX_ERMS | CPUID_7_0_EBX_SHA_NI)
 #endif/*CONFIG_LATX_AVX_OPT*/
           /* missing:
           CPUID_7_0_EBX_HLE, CPUID_7_0_EBX_AVX2,
@@ -1932,9 +1933,13 @@ static X86CPUDefinition builtin_x86_defs[] = {
         CPUID_7_0_EBX_HLE |
             CPUID_7_0_EBX_BMI1 |
             CPUID_7_0_EBX_AVX2 |
-            CPUID_7_0_EBX_BMI2,
+            CPUID_7_0_EBX_BMI2 |
+            CPUID_7_0_EBX_SHA_NI,
         .features[FEAT_XSAVE] =
             CPUID_XSAVE_XSAVEOPT | CPUID_XSAVE_XGETBV1,
+#elif defined(CONFIG_LATX_SSSE3_SSE4)
+        .features[FEAT_7_0_EBX] =
+            CPUID_7_0_EBX_SHA_NI,
 #endif/*CONFIG_LATX_AVX_OPT*/
         .xlevel = 0x8000000A,
         .model_id = "LATX64 Virtual CPU @ 2.5GHz",
