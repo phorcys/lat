@@ -3709,47 +3709,47 @@ bool translate_pcmpistrm(IR1_INST *pir1)
 static void cal_pclmulqdq(IR2_OPND d, IR2_OPND v, IR2_OPND s, uint8_t ctrl)
 {
     IR2_OPND ctrlp = ra_alloc_itemp();
-    IR2_OPND a = ra_alloc_itemp();// a = al
-    IR2_OPND b = ra_alloc_itemp();
-    IR2_OPND ftemp = ra_alloc_ftemp();
-
-    /* 选取操作数 */
-    li_d(ctrlp, ctrl);
-    la_andi(a, ctrlp, 1);// ((ctrl  1) != 0)
-    la_vreplve_d( ftemp, v, a);
-    la_vpickve2gr_d( a, ftemp, 0);
-    la_bstrpick_d( b, ctrlp, 4, 4);
-    la_vreplve_d( ftemp, s, b);
-    la_vpickve2gr_d( b, ftemp, 0);
-    ra_free_temp(ctrlp);
-
-    IR2_OPND ah = ra_alloc_itemp();
+    IR2_OPND lhs = ra_alloc_itemp();
+    IR2_OPND rhs = ra_alloc_itemp();
+    IR2_OPND shift = ra_alloc_itemp();
     IR2_OPND resl = ra_alloc_itemp();
     IR2_OPND resh = ra_alloc_itemp();
-    IR2_OPND all_label = ra_alloc_label();
-    IR2_OPND bit_label = ra_alloc_label();
+    IR2_OPND tmp = ra_alloc_itemp();
+    IR2_OPND ftemp = ra_alloc_ftemp();
+    IR2_OPND loop_label = ra_alloc_label();
     IR2_OPND end_label = ra_alloc_label();
 
-    /* 开始运算 */
-    la_and( resl, resl, zero_ir2_opnd);
-    la_and( resh, resh, zero_ir2_opnd);
-    la_and( ah, ah, zero_ir2_opnd);
-    la_beqz( b, end_label);
-    la_label( all_label);
-    la_andi( a0_ir2_opnd, b, 1);// b  1
-    la_srli_d( b, b, 1);
-    la_beqz(a0_ir2_opnd, bit_label);
-    la_xor( resl, resl, a);
-    la_xor( resh, resh, ah);
-    la_label( bit_label);
-    la_slli_d(a1_ir2_opnd, ah, 1);
-    la_bstrpick_d(ah, a, 63, 63);
-    la_or( ah, a1_ir2_opnd, ah);
-    la_slli_d( a, a, 0x1);
-    la_bnez( b, all_label);
-    la_label( end_label);
-    la_vinsgr2vr_d( d, resl, 0);
-    la_vinsgr2vr_d( d, resh, 1);
+    li_d(ctrlp, ctrl);
+    la_andi(lhs, ctrlp, 1);
+    la_vreplve_d(ftemp, v, lhs);
+    la_vpickve2gr_d(lhs, ftemp, 0);
+    la_bstrpick_d(rhs, ctrlp, 4, 4);
+    la_vreplve_d(ftemp, s, rhs);
+    la_vpickve2gr_d(rhs, ftemp, 0);
+
+    la_xor(resl, resl, resl);
+    la_xor(resh, resh, resh);
+    la_beqz(lhs, end_label);
+
+    la_label(loop_label);
+    la_ctz_d(shift, lhs);
+    la_addi_d(tmp, lhs, -1);
+    la_and(lhs, lhs, tmp);
+    la_sll_d(tmp, rhs, shift);
+    la_xor(resl, resl, tmp);
+    li_d(tmp, 64);
+    la_sub_d(tmp, tmp, shift);
+    la_srl_d(tmp, rhs, tmp);
+    la_sltu(shift, zero_ir2_opnd, shift);
+    la_sub_d(shift, zero_ir2_opnd, shift);
+    la_and(tmp, tmp, shift);
+    la_xor(resh, resh, tmp);
+    la_bnez(lhs, loop_label);
+
+    la_label(end_label);
+    la_vxor_v(d, d, d);
+    la_vinsgr2vr_d(d, resl, 0);
+    la_vinsgr2vr_d(d, resh, 1);
 }
 
 bool translate_pclmulqdq(IR1_INST * pir1) {
@@ -3771,6 +3771,7 @@ bool translate_pclmulqdq(IR1_INST * pir1) {
     }
 
     cal_pclmulqdq(dest, dest, src, ctrl);
+    ra_free_temp_auto(src);
     return true;
 }
 
